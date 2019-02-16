@@ -30,10 +30,10 @@ recupera messaggi da twitter e li salva nel database
 
 require_once('TwitterAPIExchange.php');
     $settings = array(
-        'oauth_access_token' => "2653523430-JWP7ftIdnzOBmLyD8jjw3fGoJ4Qv0x9wCfVSCmt",
-        'oauth_access_token_secret' => "lfypio09JGfYBDR5RL7A6ib2qc7U7jM25TWAEjjb2hvGc",
-        'consumer_key' => "DrqgmGbqY01vxVHLAV8IX17Pr",
-        'consumer_secret' => "QldDarpVtivFiG3lmsBYpX0xY7fQ6Nz2TD6U5mjMJIEsr3ZhWg"
+        'oauth_access_token' => "*******secret*******",
+        'oauth_access_token_secret' => "*******secret*******",
+        'consumer_key' => "*******secret*******",
+        'consumer_secret' => "*******secret*******"
     );
 
     $servername = "localhost"; 

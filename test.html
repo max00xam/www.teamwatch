@@ -1,0 +1,64 @@
+<html>
+<head>
+<meta charset="UTF-8">
+
+<!-- Include jQuery Mobile stylesheets -->
+<link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css">
+<!-- Include the jQuery library -->
+<script src="http://code.jquery.com/jquery-1.11.3.min.js"></script>
+<!-- Include the jQuery Mobile library -->
+<script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script>
+
+<style>
+.tw-btn-small {
+    width:2.7em;
+    height:2.7em;
+}
+</style>
+
+<script>
+
+$(document).ready(function() {
+
+    $("#ciccio").on("click", function() {
+        $("#pappo")
+            .removeClass('ui-corner-all')
+            .removeClass('ui-btn-icon-right')
+            .addClass('ui-btn-icon-notext')
+            .addClass('tw-btn-small');
+    });
+    
+});
+
+</script>
+
+</head>
+
+<body>
+    <div data-role="page" id="page_settings">
+        <div data-role="header" data-theme="a">
+            <h1>TeamWatch Settings</h1>
+        </div>
+        
+        <div data-role="main" class="ui-content">
+            <a href="#" id="ciccio"
+                data-corners="true" data-role="button" data-icon="bars" data-iconpos="right" data-inline="true"
+            >Select feed</a>
+            
+            <a href="#" id="pappo"
+                data-corners="true" 
+                data-role="button" 
+                data-icon="bars" 
+                
+                data-iconpos="right"
+                data-inline="true"
+            >Select feed</a>
+            
+        </div>
+        
+        <div data-role="footer" data-theme="a">
+            <span style="margin-left:1em;"><input type="submit" data-icon="check" value="Save" id="submit"/></span>
+        </div>
+    </div>
+</body>
+</html>

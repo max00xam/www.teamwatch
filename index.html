@@ -1,0 +1,519 @@
+<html>
+<head>
+<meta charset="UTF-8">
+<!-- Include meta tag to ensure proper rendering and touch zooming -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Include jQuery Mobile stylesheets -->
+<link rel="stylesheet" href="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.css">
+<!-- Include custom css -->
+<link rel="stylesheet" href="css/main.css">
+<!-- Include the jQuery library -->
+<script src="http://code.jquery.com/jquery-1.11.3.min.js"></script>
+<!-- Include the jQuery Mobile library -->
+<script src="http://code.jquery.com/mobile/1.4.5/jquery.mobile-1.4.5.min.js"></script>
+<!-- Include the jQuery Validation library -->
+<script src="http://ajax.aspnetcdn.com/ajax/jquery.validate/1.9/jquery.validate.min.js"></script>
+
+<script>
+function set_cookie(cname, cvalue, exdays) {
+    var d = new Date();
+    d.setTime(d.getTime() + (exdays*24*60*60*1000));
+    var expires = "expires="+ d.toUTCString();
+    document.cookie = cname + "=" + cvalue + "; " + expires;
+}
+
+function get_cookie(cname) {
+    var name = cname + "=";
+    var ca = document.cookie.split(';');
+    for(var i = 0; i <ca.length; i++) {
+        var c = ca[i];
+        while (c.charAt(0)==' ') {
+            c = c.substring(1);
+        }
+        if (c.indexOf(name) == 0) {
+            return c.substring(name.length,c.length);
+        }
+    }
+    return "";
+} 
+
+function ajax_send_command(cmd, user){
+    $.ajax({
+        type: "GET",
+        url: "add.php?text=" + encodeURIComponent(cmd) + "&user=" + encodeURIComponent(user),
+        async: true
+    
+    }).fail(function(){ 
+        alert("Failed to send command."); 
+    }).complete(function(){ 
+        alert("Command sent successfully.");
+    }); 
+}    
+
+function ajax_load_cloud(){
+    $.ajax({
+        type: "GET",
+        url: "tags.php?m=600",
+        async: true
+    }).done(function(data){
+        if (data.substring(0,3) == 'OK:') {
+            if (data == 'OK:NOTAGS') {
+                $(".feed-cloud").css('display', 'none');
+            } else {
+                var li = '';
+                $.each(data.substring(3).split('%'), function(val, text) {
+                    var feed = text.split(':');
+                    li += '<li><a class="nofocus" href="#">'+ feed[0] + '</a></li>';
+                });
+                
+                $(".feed-cloud ul").find('li').remove().end().append(li);
+                
+                $(".feed-cloud a").on("vclick", function(e) {
+                    // var target = $($(this).closest("div").attr("target");
+                    if ($(this).closest("div").attr("id") == "feed-cloud-message") {
+                        $("#select-feed").css("display", "none");
+                        $("#add-feed").css("display", "block");
+                        $("#feed-text").val($(this).text());
+                        
+                        if ($('#nickname').val() == '') $('#nickname').focus(); else $('#message').focus();
+                    } else {
+                        $("#tw-feed").val($(this).text());
+                    }
+                    
+                    e.preventDefault();
+                });
+                
+                $(".feed-cloud").css('display', 'block');
+            }
+        } else {
+            $(".feed-cloud").css('display', 'none');
+        }
+    }).complete(function(){
+        setTimeout(function(){ ajax_load_cloud() }, 30000);
+    }).fail(function() { $(".feed-cloud").css('display', 'none'); });
+}    
+
+var feed = "";
+var feeds_cookie;
+var isMobile;
+
+//when the dom has loaded setup form validation rules
+$(document).ready(function() {
+    isMobile = window.matchMedia("only screen and (max-width: 760px)");
+
+    $.ajaxSetup({ 
+        scriptCharset: "utf-8" , 
+        contentType: "application/x-www-form-urlencoded; charset=UTF-8"
+    });
+    
+    if (isMobile.matches) {
+        $("#btn-add-feed, #btn-select-feed")
+            .removeClass('ui-corner-all')
+            .removeClass('ui-btn-icon-right')
+            .addClass('ui-btn-icon-notext')
+            .addClass('tw-btn-small');
+            
+        $("#reset").css("display", "none");
+    }
+    
+    $('#addmessage').validate({
+        rules: {
+            nickname: {
+                required: true
+            },
+            message: {
+                required: true
+            }
+        },
+        messages: {
+            nickname: {
+                required: "Please enter your nickname."
+            },
+            message: {
+                required: "Please enter the message you want to submit."
+            }
+        },
+        
+        errorPlacement: function (error, element) {
+            element.closest('div').parent().append(error);
+        },
+        
+        submitHandler: function (form) {
+            $.mobile.loading("show");
+            
+            feed = ($('#feed-text').is(":visible")) ? $('#feed-text').val() : $("#feed-select").val();
+
+            $.ajax({
+                type: "POST",
+                url: 'save.php',
+                data: 'feed=' + encodeURIComponent(feed) + '&nickname=' + encodeURIComponent($("#nickname").val()) + '&message=' + encodeURIComponent($("#message").val()),
+                success: function (data) { 
+                    $.mobile.loading("hide");
+                    
+                    if (data.substring(0,3) == 'OK:') {
+                        var option = '';
+                        $.each(data.substring(3).split(':'), function(val, text) {
+                           option += '<option value="'+ text;
+                           option += (text == feed + '$') ? '" selected>' : '">';
+                           option += text + '</option>';
+                        });
+
+                        $('#feed-select').find('option').remove().end().append(option).val(feed);
+                        $('#feed-select').selectmenu('refresh');
+                        
+                        if (!$('#feed-select').is(":visible")) {
+                            $("#add-feed").css("display", "none");
+                            $("#select-feed").css("display", "block");
+                            $("#feed-text").val("");
+                        }
+                        
+                        $('#message').val('').focus();
+                        
+                        var validator = $("#addmessage").validate();
+                        validator.resetForm();
+                        
+                        if (feeds_cookie.indexOf(feed) == -1) {
+                            set_cookie("tw-feeds", feeds_cookie + ':' + feed, 1);
+                        }
+                        
+                        set_cookie("tw-nickname", $('#nickname').val(), 999);
+                    } else {
+                        alert ('Error sending message.');
+                    }
+                },
+                dataType: 'text'
+            }).fail(function() { $.mobile.loading("hide"); alert ('Error sending message.'); });
+
+            return false;
+        }
+    });
+    
+    $("#settings").on("submit", function(e) {
+        set_cookie('tw-twid', $("#twid").val(), 999);
+        set_cookie('tw-pcid', $("#pcid").val(), 999);
+        
+        if ($('#twid').val().length == 0 && $('#pcid').val().length == 0) { 
+            $("#btn-teamwatch").addClass('ui-disabled'); 
+        } else {
+            $("#btn-teamwatch").removeClass('ui-disabled'); 
+        }
+        
+        $(':mobile-pagecontainer').pagecontainer('change', '#page_addmessage', {
+            transition: 'slide',
+            changeHash: true,
+            reverse: false,
+            showLoadMsg: true,
+            reload: false
+        });
+        
+        e.preventDefault();
+    });
+    
+    $(':mobile-pagecontainer').pagecontainer({
+        change: function( event, ui ) { 
+            if (ui.toPage.attr("id") == 'page_teamwatch') {
+                if ($("#twid").val().length == 0) {
+                    $("#tw-twid-error").css("display", "block");
+                    $("#tw-twid-controls").css("display", "none");
+                } else {
+                    $("#tw-twid-error").css("display", "none");
+                    $("#tw-twid-controls").css("display", "block");
+                }
+
+                if ($("#pcid").val().length == 0) {
+                    $("#tw-pcid-error").css("display", "block");
+                    $("#tw-pcid-controls").css("display", "none");
+                    $("#tw-invite-pcid").css("display", "none");
+                } else {
+                    $("#tw-pcid-error").css("display", "none");
+                    $("#tw-pcid-controls").css("display", "block");
+                    $("#tw-invite-pcid").css("display", "inline");
+                }
+            }
+        }
+    });
+    
+    $(".btn-home").on("click", function() {
+        $(':mobile-pagecontainer').pagecontainer('change', '#page_addmessage', {
+            transition: 'slide',
+            changeHash: true,
+            reverse: false,
+            showLoadMsg: true,
+            reload: false
+        });
+        return false;
+    });
+
+    $("#btn-settings").on("click", function() {
+        $(':mobile-pagecontainer').pagecontainer('change', '#page_settings', {
+            transition: 'slide',
+            changeHash: true,
+            reverse: false,
+            showLoadMsg: true,
+            reload: false
+        });
+        return false;
+    });
+    
+    $("#btn-teamwatch").on("click", function() {
+        $(':mobile-pagecontainer').pagecontainer('change', '#page_teamwatch', {
+            transition: 'slide',
+            changeHash: true,
+            reverse: false,
+            showLoadMsg: true,
+            reload: false
+        });
+        return false;
+    });
+
+    $("#btn-add-feed").on("click", function() {
+        $("#select-feed").css("display", "none");
+        $("#add-feed").css("display", "block");
+        $("#feed-text").focus();
+    });
+    
+    $("#btn-select-feed").on("click", function() {
+        $("#add-feed").css("display", "none");
+        $("#select-feed").css("display", "block");
+        $("#feed-text").val("");
+    });
+    
+    $("#tw-invite-broadcast").on("click", function(e) {
+        ajax_send_command("#tw:sndinvite:" + $("#nickname").val(), "tw:broadcast");
+        $.mobile.activePage.focus();
+    });
+    
+    $("#tw-invite-pcid").on("click", function(e) {
+        ajax_send_command("#tw:sndinvite:" + $("#nickname").val(), $("#pcid").val());
+        $.mobile.activePage.focus();
+    });
+    
+    $("#tw-add-feed").on("click", function() { 
+        ajax_send_command("#tw:addfeed:" + $("#tw-feed").val(), $("#twid").val());
+        $("#tw-feed").val("");
+        $.mobile.activePage.focus();
+    });
+    
+    $("#tw-remove-feed").on("click", function() { 
+        ajax_send_command("#tw:removefeed:" + $("#tw-feed").val(), $("#twid").val());
+        $("#tw-feed").val("");
+        $.mobile.activePage.focus();
+    });
+
+    $("#tw-on").on("click", function() { 
+        ajax_send_command("#tw:on", $("#twid").val());
+        $.mobile.activePage.focus();
+    });
+
+    $("#tw-off").on("click", function() { 
+        ajax_send_command("#tw:off", $("#twid").val());
+        $.mobile.activePage.focus();
+    });
+
+    $("#tw-playpause").on("click", function() { 
+        ajax_send_command("#tw:playerctl:playpause", $("#pcid").val());
+        $.mobile.activePage.focus();
+    });
+
+    $("#tw-seektostart").on("click", function() { 
+        ajax_send_command("#tw:playerctl:seek:0:0:0:0", $("#pcid").val());
+        $.mobile.activePage.focus();
+    });
+
+    $(".nofocus").on("focus.spt", function(e){
+        e.stopPropagation();
+    });
+    
+    ajax_load_cloud();
+    
+    feeds_cookie = get_cookie("tw-feeds");
+    if (feeds_cookie != "") {
+        var option = '';
+        $.each(feeds_cookie.split(':'), function(val, text) {
+           option += '<option value="'+ text;
+           option += (text == feed + '$') ? '" selected>' : '">';
+           option += text + '</option>';
+           feed = text;
+        });
+
+        $('#feed-select').find('option').remove().end().append(option).val(feed);
+        $('#feed-select').selectmenu('refresh');
+    } else {
+        feeds_cookie = "#teamwatch"
+    }
+    
+    $('#twid').val(get_cookie('tw-twid'));
+    $('#pcid').val(get_cookie('tw-pcid'));
+    $('#nickname').val(get_cookie('tw-nickname'));
+    
+    if ($('#twid').val().length == 0 && $('#pcid').val().length == 0) { $("#btn-teamwatch").addClass('ui-disabled'); }
+    
+    if ($("#twid").val().length == 0) {
+        $("#tw-twid-error").css("display", "block");
+        $("#tw-twid-controls").css("display", "none");
+    } else {
+        $("#tw-twid-error").css("display", "none");
+        $("#tw-twid-controls").css("display", "block");
+    }
+
+    if ($("#pcid").val().length == 0) {
+        $("#tw-pcid-error").css("display", "block");
+        $("#tw-pcid-controls").css("display", "none");
+    } else {
+        $("#tw-pcid-error").css("display", "none");
+        $("#tw-pcid-controls").css("display", "block");
+    }
+    
+    if ($("#nickname").val().length == 0) $("#nickname").focus(); else $("#message").focus();
+});
+</script>
+</head>
+
+<body>
+    <div data-role="page" id="page_addmessage">
+        <form id="addmessage" action="#" data-ajax="false">
+        
+            <div data-role="header" data-theme="a">
+                <h1 class="page-title">TeamWatch send message</h1>
+                <a id="btn-settings" href="#" class="tw-btn-header ui-btn ui-btn-right ui-corner-all ui-shadow ui-icon-gear ui-btn-icon-left">Settings</a>
+            </div>
+            
+            <div data-role="main" class="ui-content">
+                <div id="add-feed">
+                    <div>
+                        <div style="float: right; padding-left:0.5em; margin-top:1.0em;">
+                            <a href="#" id="btn-select-feed" data-role="button" data-corners="true" data-iconpos="right" data-inline="true" data-icon="bars">Select feed</a>
+                            <!-- <a href="#" id="btn-select-feed" class="ui-btn ui-shadow ui-btn-inline ui-icon-plus ui-btn-icon-right ui-corner-all" data-inline="true">Select feed</a> -->
+                        </div>
+                        
+                        <div style="overflow: auto; padding-left:0.4em; padding-right:0.4em;">
+                            <label for="feed-text" class="select">Feed:</label>
+                            <input type="text" name="feed-text" id="feed-text" placeholder="Post the message to this feed">
+                        </div>
+                        <p class="field-info">If left blank it will subimt the message to the <span class="default-feed">#teamwatch</span> feed.</p>
+                    </div>
+                </div>
+                
+                <div id="select-feed">
+                    <div>
+                        <div style="float: right; padding-left: 0.5em; margin-top:1.3em;">
+                            <a href="#" id="btn-add-feed" data-role="button" data-corners="true" data-iconpos="right" data-inline="true" data-icon="plus">New feed</a>
+                            <!-- <a href="#" id="btn-add-feed" class="ui-btn ui-shadow ui-btn-inline ui-icon-plus ui-btn-icon-right ui-corner-all" data-inline="true">New feed</a> -->
+                        </div>
+                        
+                        <div style="overflow: auto; padding-left:0.4em; padding-right:0.4em;">
+                            <label for="feed-select" class="select">Feed:</label>
+                            <select size="1" name="feed-select" id="feed-select" data-native-menu="true">
+                                <option value="#teamwatch">#teamwatch</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>            
+                
+                <div id="feed-cloud-message" class="feed-cloud">
+                    <ul></ul><br style="clear:left;">
+                </div>
+                
+                <div style="padding:0.4em;">
+                    <label for="nickname"><em>* </em>Nickname:</label>
+                    <input type="text" name="nickname" id="nickname" value="" placeholder="Your nickname">
+                </div>
+                
+                <div style="padding:0.4em;">
+                    <label for="message"><em>* </em>Message:</label>
+                    <input type="text" name="message" id="message" placeholder="Message to send">
+                </div>
+            </div>
+            
+            <div data-role="footer" data-theme="a">
+                <span class="tw-btn-footer"><input type="reset" data-icon="delete" value="Reset" id="reset"/></span>
+                <span class="tw-btn-footer"><input type="submit" data-icon="check" value="Send message" id="submit"/></span>
+                <a id="btn-teamwatch" href="#" class="ui-btn ui-btn-right ui-corner-all ui-shadow">TeamWatch</a>
+            </div>
+        </form>
+    </div>
+
+    <div data-role="page" id="page_settings">
+        <form id="settings" action="#" data-ajax="false">
+        
+            <div data-role="header" data-theme="a">
+                <h1 class="page-title">TeamWatch Settings</h1>
+                <a href="#" class="tw-btn-header btn-home ui-btn ui-btn-right ui-corner-all ui-shadow ui-icon-home ui-btn-icon-left">Home</a>
+            </div>
+            
+            <div data-role="main" class="ui-content">
+                <div>
+                    <label for="twid" class="select">TeamWatch ID:</label>
+                    <input type="text" name="twid" id="twid" placeholder="Identifies your own TeamWatch add-on">
+                    <p class="field-info">The <span class="bluetext">TeamWatch ID</span> allow you to send commands to your TeamWatch add-on.</p>
+                </div>
+                
+                <div>
+                    <label for="pcid" class="select">Player control ID:</label>
+                    <input type="text" name="pcid" id="pcid" placeholder="Identifies a group of TeamWatch add-ons">
+                    <p class="field-info">You can share your <span class="bluetext">Player control ID</span> with your friends to allow them to send commands to your active Player.</p>
+                </div>
+            </div>
+            
+            <div data-role="footer" data-theme="a">
+                <span class="tw-btn-footer"><input type="submit" data-icon="check" value="Save" id="submit"/></span>
+            </div>
+        </form>
+    </div>
+    
+    <div data-role="page" id="page_teamwatch">
+        <div data-role="header" data-theme="a">
+            <h1 class="page-title">Send commands to the add-on</h1>
+            <a href="#" class="tw-btn-header btn-home ui-btn ui-btn-right ui-corner-all ui-shadow ui-icon-home ui-btn-icon-left">Home</a>
+        </div>
+        
+        <div data-role="main" class="ui-content">
+            <div>
+                <h3>TeamWatch controls</h3>
+                
+                <div id="tw-twid-error">
+                    <p><span class="bluetext">TeamWatch ID</span> is empty, to enable these controls insert your <span class="bluetext">TeamWatch ID</span> in Settings</p>
+                </div>
+                
+                <div id="tw-twid-controls">
+                    <label>Feed:</label>
+                    <input type="text" name="tw-feed" id="tw-feed" placeholder="Feed you want to start/stop following">
+                    <a href="#" id="tw-add-feed" data-role="button" data-icon="plus" data-iconpos="right" data-corners="true" data-inline="true">Start following</a>
+                    <a href="#" id="tw-remove-feed" data-role="button" data-icon="minus" data-iconpos="right" data-corners="true" data-inline="true">Stop following</a>
+                    
+                    <div id="teamwatch-feed-cloud" class="feed-cloud">
+                        <ul></ul><br style="clear:left;">
+                    </div>
+
+                    <label>Switch message displaying on or off:</label>
+                    <a href="#" id="tw-on" data-role="button" data-corners="true" data-inline="true">ON</a>
+                    <a href="#" id="tw-off" data-role="button" data-corners="true" data-inline="true">OFF</a>
+                </div>
+                
+                <h3>Player controls</h3>
+                
+                <div id="tw-pcid-error">
+                    <p><span class="bluetext">Player control ID</span> is empty, to enable these controls insert your <span class="bluetext">Player Control ID</span> in Settings</p>
+                </div>
+                
+                <div id="tw-pcid-controls">
+                    <p>These commands are sent to all the add-ons that share the same <span class="bluetext">Player control ID</span>.</p>
+                    <a href="#" id="tw-playpause" data-role="button" data-corners="true" data-inline="true">Play/Pause</a>
+                    <a href="#" id="tw-seektostart" data-role="button" data-corners="true" data-inline="true">Seek to start</a>
+                </div>
+                
+                <h3>Invites</h3>
+                
+                <div>
+                    <p>Invite other users to watch a movie or tvshow (from the Kodi library).</p>
+                    <a href="#" id="tw-invite-pcid" data-role="button" data-corners="true" data-inline="true">Invite your friends</a>
+                    <a href="#" id="tw-invite-broadcast" data-role="button" data-corners="true" data-inline="true">Invite everyone</a>
+                </div>
+            </div>
+        </div>
+        
+        <div data-role="footer" data-theme="a"></div>
+    </div>
+    
+</body>
+</html>

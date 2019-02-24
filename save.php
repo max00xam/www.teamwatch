@@ -3,8 +3,8 @@
     
     $servername = "localhost"; 
     $database = "TeamWatch";
-    $username = "maxxam";
-    $password = "YlFdXb9cCsYMhRNqWwvR";
+    $username = "<db username>";
+    $password = "<db password>";
 
     $feedlist = (isset($_COOKIE["TeamWatch-feedlist"])) ? $feedlist = $_COOKIE["TeamWatch-feedlist"] : "#teamwatch";
         

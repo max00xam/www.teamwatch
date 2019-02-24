@@ -1,8 +1,8 @@
 <?php
     $servername = "localhost"; 
     $database = "TeamWatch";
-    $username = "maxxam";
-    $password = "YlFdXb9cCsYMhRNqWwvR";
+    $username = "<db username>";
+    $password = "<db password>";
 
     $mysqli = mysqli_connect($servername, $username, $password, $database) or die($json_res);
     if ($mysqli->connect_errno) {

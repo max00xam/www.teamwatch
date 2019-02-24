@@ -38,8 +38,8 @@ require_once('TwitterAPIExchange.php');
 
     $servername = "localhost"; 
     $database = "TeamWatch";
-    $username = "maxxam";
-    $password = "YlFdXb9cCsYMhRNqWwvR";
+    $username = "<db username>";
+    $password = "<db password>";
 
     // id, user, text, time, feed, is_tweet, twitter_id
 

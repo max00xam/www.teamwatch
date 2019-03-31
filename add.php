@@ -1,16 +1,8 @@
 <?php
-    $servername = "localhost"; 
-    $database = "TeamWatch";
-    $username = "<db username>";
-    $password = "<db password>";
+    require_once("db_utils.php")
 
-    $mysqli = mysqli_connect($servername, $username, $password, $database) or die($json_res);
-    if ($mysqli->connect_errno) {
-        die (json_error($mysqli->connect_error));
-    }
-
-    if (isset($_GET['user'])) $user = $mysqli->real_escape_string($_GET['user']);
-    if (isset($_GET['text'])) $text = $mysqli->real_escape_string($_GET['text']);
+    if (isset($_GET['user'])) $user = $_GET['user'];
+    if (isset($_GET['text'])) $text = $_GET['text'];
 
     if (!isset($user) || $user == '') die('no user');
     if (!isset($text) || $text == '') die('no text');
@@ -22,17 +14,20 @@
     
     $text = html_entity_decode($text);
     
-    $mysqli->query("SET NAMES utf8");
-    $mysqli->query("SET character_set_results = 'utf8', character_set_client = 'utf8', character_set_connection = 'utf8', character_set_database = 'utf8', character_set_server = 'utf8'");
+    $conn = getDB();
 
-    $sql = "INSERT INTO `messages` VALUES (NULL, '" . $user . "', '" . $text . "', NULL, '$feed', 0, -1, '')";
-    echo $sql . "\n";
+    $stmt = $conn->prepare("INSERT INTO `messages` () VALUES (NULL, :user, :text, NULL, :feed, 0, -1, '')");
+    $stmt->bind_param(':user', $user);
+    $stmt->bind_param(':text', $text);
+    $stmt->bind_param(':feed', $feed);
     
-    if (!$result = $mysqli->query($sql)) {
-        echo $mysqli->error;
+    
+    if (!$result = $stmt->execute()) {
+        echo $conn->error;
     }
     
-    $mysqli->close();
+    //destroy the connection object
+    $conn = null;
     
     echo "ok"
 ?>

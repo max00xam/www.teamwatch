@@ -28,18 +28,15 @@ recupera messaggi da twitter e li salva nel database
 --> restituisce il primo messaggio twitter con id_twitter > $id_twitter
 */
 
-require_once('TwitterAPIExchange.php');
+    require_once("db_utils.php")
+    require_once('TwitterAPIExchange.php');
+    
     $settings = array(
         'oauth_access_token' => "*******secret*******",
         'oauth_access_token_secret' => "*******secret*******",
         'consumer_key' => "*******secret*******",
         'consumer_secret' => "*******secret*******"
     );
-
-    $servername = "localhost"; 
-    $database = "TeamWatch";
-    $username = "<db username>";
-    $password = "<db password>";
 
     // id, user, text, time, feed, is_tweet, twitter_id
 
@@ -50,67 +47,25 @@ require_once('TwitterAPIExchange.php');
         error_reporting(E_ALL & ~E_NOTICE & ~E_STRICT & ~E_DEPRECATED);
     }
 
-    $mysqli = mysqli_connect($servername, $username, $password, $database);
-    if ($mysqli->connect_errno) {
-        die (json_error($mysqli->connect_error));
-    }
-
-    $mysqli->query("SET NAMES utf8");
-    $mysqli->query("SET character_set_results = 'utf8', character_set_client = 'utf8', character_set_connection = 'utf8', character_set_database = 'utf8', character_set_server = 'utf8'");
-    
-    function escape_string ($txt) {
-        return str_replace("\"", "\\\"", $txt);
-    }
-
-    function json_message ($id, $user, $text, $is_twitter, $time) {
-        $escape_string = escape_string;
-        return "{\"status\":\"ok\", \"id\":$id, \"user\":\"{$escape_string($user)}\", \"text\":\"{$escape_string($text)}\", \"is_twitter\":$is_twitter, \"time\":\"$time\"}";
-    }
-
-    function json_message_x ($id, $user, $text, $feed, $is_twitter, $time) {
-        $escape_string = escape_string;
-        return "{\"status\":\"ok\", \"id\":$id, \"user\":\"{$escape_string($user)}\", \"text\":\"{$escape_string($text)}\", \"feed\":\"{$escape_string($feed)}\", \"is_twitter\":$is_twitter, \"time\":\"$time\"}";
-    }
-
     function json_error ($reason) {
-        $escape_string = escape_string;
-        return "{\"status\":\"fail\", \"reason\":\"{$escape_string($reason)}\"}";
+        $json_answer = array (
+            'status' => 'fail',
+            'reason' => $reason
+        );
+        return json_encode($json_answer);
     }
 
-    function sql_select($sql) {
-        global $mysqli;
-        
-        if (DEBUG == 1) echo $sql . "<br>";
-        
-        if ($result = $mysqli->query($sql)) {
-            if ($result->num_rows > 0) {
-                $row = $result->fetch_assoc();
-                return $row;
-            } else {
-                return NULL;
-            }
-            
-            $result->close();
-        } else {
-            if (isset($mysqli)) {
-                $err = $mysqli->error;
-                $mysqli->close();
-            } else {
-                $err = "error in sql_select mysqli is null";
-            }
-            
-            die (json_error($err));
-        }
-    }
-
+    // ******* GET DATABASE ****************************************************************************************
+    $conn = getDB();
+    
     // ******* GET PARAMETERS ****************************************************************************************
 
     $id_chat = intval($_GET['idc']);
     $id_twitter = intval($_GET['idt']);
-    if (isset($_GET['q'])) $query = $mysqli->real_escape_string($_GET['q']);
-    if (isset($_GET['twid'])) $twid = $mysqli->real_escape_string($_GET['twid']);
-    if (isset($_GET['pcid'])) $pcid = $mysqli->real_escape_string($_GET['pcid']);
-    $twitter_query_params = $mysqli->real_escape_string($_GET['tqp']);
+    if (isset($_GET['q'])) $query = $_GET['q'];
+    if (isset($_GET['twid'])) $twid = $_GET['twid'];
+    if (isset($_GET['pcid'])) $pcid = $_GET['pcid'];
+    $twitter_query_params = $_GET['tqp'];
     $twitter_lang = (isset($_GET['tl'])) ? $_GET['tl'] : '%';
     
     if (isset($query)) {
@@ -119,7 +74,7 @@ require_once('TwitterAPIExchange.php');
         $twitter_query = implode (" OR ", $query_array);
 
         $i = count($query_array);
-        $sql_query = '';
+        $sql_query = '';sql_select
 
         while ($i) {
             $q = $query_array[--$i];
@@ -146,16 +101,14 @@ require_once('TwitterAPIExchange.php');
     // ******* SETTINGS #TW:ID ***************************************************************************************
     if (!isset($_GET['idc'], $_GET['idt']) || ($id_chat == -1 && $id_twitter == -1)) {
         // ******* GET LAST TWITTER_ID ***********************************************************************************
-        $sql = "SELECT `twitter_id` FROM `messages` WHERE `is_tweet` = 1 ORDER by `twitter_id` DESC LIMIT 1";
-        $res = sql_select($sql);
+        $stmt = $conn->query('SELECT twitter_id FROM messages WHERE is_tweet = 1 ORDER by twitter_id DESC LIMIT 1');
+        $id_twitter = $stmt->fetchColumn();
         $id_twitter = ($res) ? $res['twitter_id'] : 0;
         
         // ******* GET LAST CHAT_ID **************************************************************************************
-        $sql = "SELECT `id` FROM `messages` WHERE `is_tweet` = 0 ORDER by `id` DESC LIMIT 1";
-        $res = sql_select($sql);
+        $stmt = $conn->query('SELECT id FROM messages WHERE is_tweet = 0 ORDER by id DESC LIMIT 1');
+        $id_chat = $stmt->fetchColumn();
         $id_chat = ($res) ? $res['id'] : 0;
-
-        $mysqli->close();
         die("{\"status\":\"settings\", \"param\": \"#tw:id\", \"idc\": $id_chat, \"idt\": $id_twitter}");
     }
     
@@ -163,44 +116,74 @@ require_once('TwitterAPIExchange.php');
     
     // ******* SETTINGS #TW:... **************************************************************************************
     if (isset($pcid) && $pcid != '') {
-        $sql = "SELECT * FROM `messages` WHERE `id` > $id_chat and (`user` = '$twid' or `user` = '$pcid') ORDER by `id` DESC LIMIT 1";
+        $stmt = $conn->prepare('SELECT text, id FROM messages WHERE id > :id_chat and (user = :twid or user = :pcid) ORDER by id DESC LIMIT 1');
+        $stmt->bind_param(':pcid', $pcid);
+    
     } else {
-        $sql = "SELECT * FROM `messages` WHERE `id` > $id_chat and `user` = '$twid' ORDER by `id` DESC LIMIT 1";
+        $stmt = $conn->prepare('SELECT text, id FROM messages WHERE id > :id_chat and user = :twid ORDER by id DESC LIMIT 1');
     }
-    $res = sql_select($sql);
+    $stmt->bind_param(':id_chat', $id_chat);
+    $stmt->bind_param(':twid', $twid);
+    $stmt->execute(); 
+    $res = $stmt->fetch();
     if ($res) {
-        $mysqli->close();
-        die("{\"status\":\"settings\", \"param\": \"{$res['text']}\", \"id\":{$res['id']}}");
+        $json_answer = array (
+            'status' => 'settings',
+            'param' => $res['text'],
+            'id' -> $res['id']
+        );
+        die(json_encode($json_answer));
     }
     
     if (!isset($query) || $query = '') die(json_error('missing parameter q'));    
 
     // ******* GET NEXT CHAT MESSAGE *********************************************************************************
-    $sql = "SELECT * FROM `messages` WHERE `id` > $id_chat and ($sql_query) and not `text` like '#tw:%' and `is_tweet` = 0 ORDER by `id` LIMIT 1";
-    $res = sql_select($sql);
+    //TODO: THIS IS DUMB AND STUPID ($sql_query), ask max00xam what he want to do
+    $stmt = $conn->prepare("SELECT id, user, text, feed, time FROM messages WHERE id > :id_chat and (:sql_query) and not text like '#tw:%' and is_tweet = 0 ORDER by id LIMIT 1");
+    $stmt->bind_param(':id_chat', $id_chat);
+    $stmt->bind_param(':sql_query', $sql_query);
+    $stmt->execute(); 
+    $res = $stmt->fetch();
     if ($res) {
-        $mysqli->close();
+        $json_answer = array (
+            'status' => 'ok',
+            'id' => $res['id'],
+            'user' -> $res['user'],
+            'text' => $res['text'],
+            'is_twitter' => 0,
+            'time' => $res['time']
+        );
         if (isset($_GET['godmode'])) {
-            die(json_message_x($res['id'], $res['user'], $res['text'], $res['feed'], 0, $res['time']));
-        } else {
-            die(json_message($res['id'], $res['user'], $res['text'], 0, $res['time']));
+            $json_answer['feed'] = $res['feed'];
         }
+        
+        die(json_encode($json_answer));
     }
     
     if (!isset($_GET['notweet'])) {
         // ******* GET NEXT TWITTER MESSAGE ******************************************************************************
-        $sql = "SELECT * FROM `messages` WHERE `twitter_id` > $id_twitter and ($sql_query) and `is_tweet` = 1 and `twitter_lang` = '$twitter_lang' ORDER by `twitter_id` LIMIT 1";
-        $res = sql_select($sql);
+        $stmt = $conn->prepare("SELECT twitter_id, user, text, time FROM messages WHERE twitter_id > :id_twitter and (:sql_query) and is_tweet = 1 and twitter_lang = :twitter_lang ORDER by twitter_id LIMIT 1");
+        $stmt->bind_param(':id_twitter', $id_twitter);
+        $stmt->bind_param(':sql_query', $sql_query);
+        $stmt->bind_param(':twitter_lang', $twitter_lang);
+        $stmt->execute(); 
         if ($res) {
-            $mysqli->close();
-            die(json_message($res['twitter_id'], $res['user'], $res['text'], 1, $res['time']));
+            $json_answer = array (
+                'status' => 'ok',
+                'id' => $res['twitter_id'],
+                'user' -> $res['user'],
+                'text' => $res['text'],
+                'is_twitter' => 1,
+                'time' => $res['time']
+            );
+            die(json_encode($json_answer));
         }
     
-        $res = sql_select("SELECT * FROM `twitter_access` WHERE 1 LIMIT 1");
+        $stmt = $conn->query("SELECT last_request_time FROM twitter_access WHERE 1 LIMIT 1");
+        $res = $stmt->fetchColumn();
         if ($res) {
             $tdiff = time() - strtotime($res['last_request_time']);
             if ($tdiff < 10) {
-                $mysqli->close();
                 $t = 10-$tdiff;
                 die(json_error("waiting $t secs to avoid search rate limit"));
             }
@@ -221,53 +204,48 @@ require_once('TwitterAPIExchange.php');
 
         if (count($statuses) == 0) {
             // ******* NO NEW TWEETS SAVE LAST API/SEARCH TIME FOR RATE LIMIT ************************************************
-            $sql = "UPDATE `twitter_access` SET result='no feeds', last_request_time=CURRENT_TIMESTAMP WHERE 1";
-            $mysqli->query($sql);
-            $mysqli->close();
+            $conn->query("UPDATE twitter_access SET result=no feeds, last_request_time=CURRENT_TIMESTAMP WHERE 1")->execute();
             die(json_error('no feeds'));
         } else {
             // ******* SAVE LAST API/SEARCH TIME FOR RATE LIMIT **************************************************************
-            $sql = "UPDATE `twitter_access` SET result='ok', last_request_time=CURRENT_TIMESTAMP WHERE 1";
-            $mysqli->query($sql);
+            $conn->query("UPDATE `twitter_access` SET result='ok', last_request_time=CURRENT_TIMESTAMP WHERE 1")->execute();
 
             // ******* ADD THE NEW TWEETS TO THE DATABASE ********************************************************************
-            $res = NULL;
-            $index = count($statuses);
-            while($index) {
-                $status = $statuses[--$index];
+            $stmt = $conn->prepare("INSERT INTO `messages` VALUES (NULL, ?, ?, NULL, ?, 1, ?, ?");
+            for($index = count($statuses)-1; $index >= 0; $index--) {
+                $status = $statuses[$index];
 
                 // test the tweet text+username against all tags to find the one that matches
-                foreach ($query_array as $tag) if (strpos($status->text . $status->user->name, $tag) !== false) break;
+                foreach ($query_array as $tag)
+                    if (strpos($status->text . $status->user->name, $tag) !== false)
+                        break;
 
                 // test if it is a retweet if "RT @" is found then continue to the next tweet
-                if (strpos($status->text, "RT @") !== false) continue;
-                
-                if ($res == NULL) $res = $status;
+                if (strpos($status->text, "RT @") !== false)  continue;
                 
                 if (DEBUG == 1) echo $status->id . "<br>";
                 
-                $sql = "INSERT INTO `messages` VALUES (NULL, '" . 
-                    $mysqli->real_escape_string($status->user->name) . "', '" . 
-                    $mysqli->real_escape_string($status->text) . "', NULL, '" . 
-                    $mysqli->real_escape_string($tag) . "', 1, " . 
-                    $status->id . ", '" .
-                    $status->lang . "')";
-                
-                if (DEBUG == 1) echo $sql . "<br>"; // var_dump($status);
-                
-                $mysqli->query($sql);
+                $stmt->execute([$status->user->name, $status->text, $tag, $status->id, $status->lang]);
             }
-            $mysqli->close();
             
             // ******* RETURN THE OLDEST TWEET *******************************************************************************
-            if (DEBUG == 1) echo $res->id . "<br>";
-            if ($res == NULL)
+            $older = $statuses[count($statuses)-1];
+            if (DEBUG == 1) echo $older->id . "<br>";
+            if ($older == NULL)
                 die(json_error('no feeds'));
-            else
-                die(json_message($res->id, $res->user->name, $res->text, 1, $res->created_at));
+            else{
+                $json_answer = array (
+                    'status' => 'ok',
+                    'id' => $older->id,
+                    'user' -> $older->user->name,
+                    'text' => $older->text,
+                    'is_twitter' => 1,
+                    'time' => $older->created_at
+                );
+                die(json_encode($json_answer));
+            }
         }
     }
     
-    $mysqli->close();
     die(json_error('no feeds'));
 ?>
